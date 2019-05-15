@@ -1,0 +1,119 @@
+version: '2'
+services:
+
+  nginx-proxy:
+    image: jwilder/nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/etc/nginx/vhost.d"
+      - "/usr/share/nginx/html"
+      - "/var/run/docker.sock:/tmp/docker.sock:ro"
+      - "/etc/nginx/certs"
+    networks:
+      - proxy-tier
+
+  letsencrypt-nginx-proxy-companion:
+    image: jrcs/letsencrypt-nginx-proxy-companion
+    container_name: letsencrypt-nginx-proxy-companion
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    volumes_from:
+      - "nginx-proxy"
+    networks:
+      - proxy-tier
+
+
+  odoo:
+    image: odoo:12.0
+    depends_on:
+      - db
+    environment:
+      - HOST=db
+      - USER=odoo
+      - PASSWORD=myodoo
+      - VIRTUAL_HOST=erp.aps-upc.tk
+      - VIRTUAL_PORT=8069
+      - CERT_NAME=aps-upc.tk
+      - LETSENCRYPT_HOST=erp.aps-upc.tk
+      - LETSENCRYPT_EMAIL=info@aps-upc.tk
+    networks:
+      - db-tier
+      - proxy-tier
+
+  db:
+    image: postgres:10
+    environment:
+        - POSTGRES_DB=postgres
+        - POSTGRES_PASSWORD=myodoo
+        - POSTGRES_USER=odoo
+        - PGDATA=/var/lib/postgresql/data/pgdata
+          #volumes:
+          #- ./../odoo-data/db:/var/lib/postgresql/data/pgdata
+    networks:
+        - db-tier
+
+ 
+  owncloud:
+    image: owncloud
+    restart: always
+    ports:
+      - 8080:80
+    environment:
+      - VIRTUAL_HOST=drive.aps-upc.tk
+      - CERT_NAME=aps-upc.tk
+      - LETSENCRYPT_HOST=drive.aps-upc.tk
+      - LETSENCRYPT_EMAIL=info@aps-upc.tk
+    volumes:
+      - ./../owncloud-web-data:/var/www/html
+    networks:
+      - db-tier
+      - proxy-tier
+
+        #  mysql:
+        #    image: mariadb
+        #    restart: always
+        #    environment:
+        #      MYSQL_ROOT_PASSWORD: example
+        #    volumes:
+        #      - ./../owncloud-db-data:/var/lib/mysql
+        #    networks:
+        #      - db-tier
+
+        #  wordpress:
+        #    image: wordpress
+        #    restart: always
+        #    ports:
+        #      - 8090:80
+        #    environment:
+        #      - WORDPRESS_DB_HOST=wp_mysql
+        #      - WORDPRESS_DB_PASSWORD=example
+        #      - VIRTUAL_HOST=www.aps-upc.tk
+        #      - CERT_NAME=aps-upc.tk
+        #      - LETSENCRYPT_HOST=www.aps-upc.tk
+        #      - LETSENCRYPT_EMAIL=info@aps-upc.tk
+        #    volumes:
+        #      - ./../wordpress-data/wp-content:/var/www/html/wp-content 
+        #    networks:
+        #      - db-tier
+        #      - proxy-tier
+
+ 
+        #  wp_mysql:
+        #    image: mysql:5.7
+        #    restart: always
+        #    environment:
+        #      - MYSQL_ROOT_PASSWORD=example
+        #    volumes:
+        #       - ./../wordpress-data/db:/var/lib/mysql
+        #    networks:
+        #      - db-tier
+
+
+networks:
+  db-tier:
+    driver: bridge
+  proxy-tier:
+    driver: bridge
+
